@@ -1,6 +1,6 @@
 # MATLAB analysis pipeline for focused ultrasound neuromodulation
 
-This repository contains the MATLAB analysis code used to study focused ultrasound (FUS) neuromodulation in the auditory cortex using widefield calcium imaging. The work is rooted in the experimental program described in Jacob Hehir’s dissertation draft, but the analyses in this repository reflect a later and more refined stage of the project: a deeper effort to quantify spatially specific, statistically defensible effects beyond the more preliminary thesis-era observations.
+This repository contains the MATLAB analysis code used to study focused ultrasound (FUS) neuromodulation in the auditory cortex using widefield calcium imaging. The work is rooted in the experimental program described in Jacob Hehir’s dissertation draft, and the analyses in this repository reflect a later stage of the project in which the same experimental framework was developed further for more detailed quantitative evaluation.
 
 ## Repository context
 
