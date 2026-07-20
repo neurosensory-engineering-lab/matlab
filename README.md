@@ -1,27 +1,35 @@
 # MATLAB analysis pipeline for focused ultrasound neuromodulation
 
-This repository contains MATLAB scripts for analyzing widefield imaging data from focused ultrasound (FUS) neuromodulation experiments. The overall goal is to quantify whether FUS produces measurable, spatially specific, and reproducible changes in cortical activity, and to characterize how those effects vary with stimulation parameters, target location, and time after stimulation.
+This repository contains the MATLAB analysis code used to study focused ultrasound (FUS) neuromodulation in the auditory cortex using widefield calcium imaging. The work is rooted in the experimental program described in Jacob Hehir’s dissertation draft, but the analyses in this repository reflect a later and more refined stage of the project: a deeper effort to quantify spatially specific, statistically defensible effects beyond the more preliminary thesis-era observations.
 
-## Project focus
+## Repository context
 
-The analysis workflow is organized around the following questions:
+The original thesis work focused on a new experimental platform for testing FUS in vivo: a combination of widefield calcium imaging, auditory stimulation, and targeted ultrasound delivery in mice. The dissertation framed the project around the idea that FUS could modulate auditory-evoked cortical responses in a safe, reversible, and spatially precise way.
 
-- Does FUS increase or suppress neural activity relative to pre-stimulation baseline?
-- Are the effects spatially localized around the intended sonication target?
-- Are the responses robust after quality control and correction for session drift or rundown?
-- Do low-power and high-power conditions produce distinct patterns of modulation?
+This repository captures the subsequent analysis effort for that same experimental series. In contrast to the thesis draft, which presents early descriptive and preliminary conclusions, the code here is geared toward a more rigorous analysis of:
+
+- response amplitude and timing changes,
+- spatial specificity around the intended FUS target,
+- low-power versus high-power effects,
+- control drift or rundown correction,
+- and quality-controlled comparisons across trials and experimental groups.
+
+## Scientific motivation
+
+The broader project asks whether focused ultrasound can be used as a noninvasive tool to modulate sensory processing in cortex. The auditory system is a useful testbed because it offers well-defined tonotopic organization, making it possible to ask whether FUS changes activity in a spatially structured and interpretable way.
+
+The experimental story in this repository is therefore about more than a single effect size. It is about building a quantitative framework for evaluating whether FUS produces meaningful neuromodulatory effects in vivo, and whether those effects are robust enough to support further mechanistic or translational work.
 
 ## Main analysis themes
 
 The repository supports several related analysis directions:
 
-- Functional response extraction from TIFF image stacks
-- ROI-based analysis using PC1 or spatial masks
-- Pre-FUS versus post-FUS gain comparisons
-- Spatial ring analysis around the FUS target
-- Dual-tone / targeting validation experiments
-- Relay kinetics and temporal evolution analyses
-- QC filtering to remove noisy or unstable traces
+- extraction of functional responses from TIFF image stacks,
+- ROI-based analysis using PC1 masks or spatial rings,
+- pre-FUS versus post-FUS gain comparisons,
+- spatial targeting and dual-tone validation analyses,
+- relay kinetics and temporal evolution analyses,
+- and strict QC filtering to remove noisy or unstable traces.
 
 ## Key scripts
 
@@ -48,7 +56,7 @@ The repository supports several related analysis directions:
 
 - Much of the code assumes a specific folder structure and experiment naming convention tied to the lab dataset.
 - Several scripts depend on precomputed mask variables such as PC1 maps or saved results structures.
-- The repository is best understood as an analysis toolkit for a broader experimental series rather than a single standalone script.
+- This repository is best understood as a research analysis toolkit for a specific experimental series rather than a single standalone script.
 
 ## Intended use
 
@@ -57,4 +65,4 @@ This codebase is intended for researchers working on FUS neuromodulation experim
 - extracting functional responses from imaging data,
 - testing spatial specificity,
 - comparing low- versus high-power conditions,
-- and reporting robust, QC-filtered results.
+- and reporting robust, QC-filtered results that go beyond the earlier descriptive thesis analyses.
