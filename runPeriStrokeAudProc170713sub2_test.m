@@ -4,26 +4,26 @@ path(path,'~/Dropbox/Addons/')
 %% parameters
 param.mua0=0.1;
 param.mus0=10;
-param.figSaveBool=0;
+param.figSaveBool=1;
 
 paramFit.n = 1.4;
 paramFit.Reff = 0;
 paramFit.lambda = 785;
 paramFit.cutoff = 1.1;
 
-param.outFile='audProc170713Pt1-';
-dataDir='/Volumes/FISHER_USB/breath_holding/091626/';
-% dataDir='/home/drbusch/Dropbox/Research/Brain/TBI_NYMC/AuditoryProcessing/Data/20170713-sub1/';
-dataFile = '091626_0916_1323_';
-% dataFile='20170713-sub1_0713_1543_';
+param.outFile='heartbeat_hopefully';
+dataDir='F:\091617\';
+dataFile='test091617_0916_1650_';
 
-param.markBaseRest=[1,2
-];
+%These are the various rest periods (start, stop pairs).
+param.markBaseRest=[1,2;
+    1,2];
 %    7,8;
 %    11,12;];
-param.markDPAAE=[1 1; 1 1];
-param.markActive=[1 1; 1 1];
-
+% param.markDPAAE=[3 4; 21 22];
+% param.markActive=[12 13; 16 17];
+param.markDPAAE=[];
+param.markActive=[];
 param.windowT=10; % s, for TCD mean velocity moving window
 
 %  param.markBaseRestI=zeros(size(param.markBaseRest));
@@ -198,7 +198,6 @@ end
 
 %%
 markIndex=find(Marks_DCS);
-markIndex=markIndex(:)';
 markVec=1:length(markIndex);
 param.markBaseRestI=markIndex(param.markBaseRest);
 param.markDPAAEI=markIndex(param.markDPAAE);
@@ -208,8 +207,9 @@ param.bkgndI=param.markBaseRestI(1,:);
 
 
 %% normalize the data to baseline, add units
-for ii=1:size(AI_Data,1)
+for ii=1:size(AI_Data,1);
     AI_DataN(ii,:)=AI_Data(ii,:)/nanmean(AI_Data(ii,param.markBaseRestI(1,1):param.markBaseRestI(1,2)));
+%    AI_DataN(ii,:)=AI_Data(ii,:)/nanmean(AI_Data(ii,param.markBaseRestI(1,1):param.markBaseRestI(1,2)));
     AI_DataU(ii,:)=AI_Data(ii,:)*dataUnitConv(ii);
 end
 
@@ -371,38 +371,35 @@ for ii=1:16
     % mark the baseline region
     vline(param.markBaseRestI(1,:),'b')
     % mark the rest regions
-    for jj=2:size(param.markBaseRestI,1)
-        vline(param.markBaseRestI(jj,:),'c')
-    end
+    vline(param.markBaseRestI(2,:),'c')
+    vline(param.markBaseRestI(3,:),'c')
     % mark the test regions
     vline(param.markDPAAEI(:),'m')
     vline(param.markActiveI(:),'r')
 end
 fsavefig(fid,'respRestTest',param.figSaveBool)
-% baseline-subtracted overlay of all channels
+% normalized
 fid=figure(2);clf;
 set(gcf,'Position',[676          27        1920        1066])
-hold on
-baselineRange=param.bkgndI(1):param.bkgndI(2);
-baselineSubtracted=AI_DataU-nanmean(AI_DataU(:,baselineRange),2);
-for ii=1:size(baselineSubtracted,1)
-    plot(TimeAxis_DCS,baselineSubtracted(ii,:),'LineWidth',1.1,'DisplayName',dataChannels{ii})
+h=4;w=4;
+for ii=1:16
+    tdat=AI_DataN(ii,:);
+    subplot(h,w,ii)
+    plot(tdat,'x')
+    title([dataChannels{ii} ' norm'])
+    axis tight
+    ylim(prctile(tdat,[1 99]))
+    vline(markIndex)
+    % mark the baseline region
+    vline(param.markBaseRestI(1,:),'b')
+    % mark the rest regions
+    vline(param.markBaseRestI(2,:),'c')
+    vline(param.markBaseRestI(3,:),'c')
+    % mark the test regions
+    vline(param.markDPAAEI(:),'m')
+    vline(param.markActiveI(:),'r')
 end
-vline(TimeAxis_DCS(markIndex),'k')
-vline(TimeAxis_DCS(param.markBaseRestI(1,:)),'b')
-for jj=2:size(param.markBaseRestI,1)
-    vline(TimeAxis_DCS(param.markBaseRestI(jj,:)),'c')
-end
-vline(TimeAxis_DCS(param.markDPAAEI(:)),'m')
-vline(TimeAxis_DCS(param.markActiveI(:)),'r')
-axis tight
-set(gca,'FontSize',16)
-xlabel('Time [s]')
-ylabel('Baseline-subtracted signal [channel units]')
-title('All channels, baseline-subtracted')
-legend('Location','eastoutside')
-hold off
-fsavefig(fid,'respRestTest-allChannels-baselineSubtracted',param.figSaveBool)
+fsavefig(fid,'respRestTest-norm',param.figSaveBool)
 %% units
 fid=figure(3);clf;
 set(gcf,'Position',[676          27        1920        1066])
@@ -425,9 +422,8 @@ for ii=1:16
     % mark the baseline region
     vline(param.markBaseRestI(1,:),'b')
     % mark the rest regions
-    for jj=2:size(param.markBaseRestI,1)
-        vline(param.markBaseRestI(jj,:),'c')
-    end
+    vline(param.markBaseRestI(2,:),'c')
+    vline(param.markBaseRestI(3,:),'c')
     % mark the test regions
     vline(param.markDPAAEI(:),'m')
     vline(param.markActiveI(:),'r')
