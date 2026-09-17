@@ -42,8 +42,8 @@ if isempty(baselineFrames)
     error('The first two marks do not define a valid baseline interval.');
 end
 
-fdet(1).values = [2.5 2:4];
-fdet(2).values = [2.5 6:8];
+fdet(1).values = [2.5 1];
+fdet(2).values = [2.5 2:8];
 [microBfi, g2data, g2fit, beta, rho, intdcs] = ...
     fastdcs1layer_clean(fdet, g2Data, intensities, delayTimes, ...
     0.1, 10, baselineFrames);
