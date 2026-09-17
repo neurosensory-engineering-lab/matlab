@@ -32,6 +32,20 @@ end
 [total_mice_mat, num_bins, num_pcs] = size(grand_matrix); 
 x_labels = {'Pre-FUS', 'Post Bin 1', 'Post Bin 2', 'Post Bin 3', 'Post Bin 4', 'Post Bin 5'};
 
+% Ensure a normalized version exists. This is derived from the saved grand_matrix
+% in the same way as the post-hoc normalized analyses: each bin is normalized
+% to the corresponding pre-FUS value for that mouse and PC channel.
+if ~exist('norm_grand_matrix', 'var') || isempty(norm_grand_matrix)
+    norm_grand_matrix = grand_matrix;
+    for p = 1:num_pcs
+        denom = grand_matrix(:, 1, p);
+        denom = reshape(denom, size(denom,1), 1, 1);
+        denom(abs(denom) < eps) = NaN;
+        norm_grand_matrix(:, :, p) = grand_matrix(:, :, p) ./ denom;
+    end
+    fprintf('>>> Created norm_grand_matrix from grand_matrix using pre-FUS normalization.\n');
+end
+
 % Target low power and high power cohorts exclusively
 group_matrices_norm = {norm_grand_matrix(isL, :, :), norm_grand_matrix(isH, :, :)};
 group_labels = {'Low Power Cohort (L)', 'High Power Cohort (H)'};
