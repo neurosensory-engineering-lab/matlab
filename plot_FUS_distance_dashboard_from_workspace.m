@@ -43,82 +43,106 @@ function plot_FUS_distance_dashboard_from_workspace()
         local_time_labels = generate_default_time_labels(num_bins_to_plot);
     end
 
-    fig = figure('Name', 'FUS Distance Dashboard', 'Color', 'w', 'Position', [20 20 1800 950]);
+    fig = figure('Name', 'FUS Distance Dashboard', 'Color', 'w', 'Position', [20 20 1800 1440]);
+    set(fig, 'PaperUnits', 'inches', 'PaperPosition', [0 0 6.0 4.8], ...
+        'PaperSize', [6.0 4.8]);
     num_panels = num_bins_to_plot + 1;
-    num_rows = ceil(sqrt(num_panels));
-    num_cols = ceil(num_panels / num_rows);
-    tlo = tiledlayout(num_rows, num_cols, 'TileSpacing', 'compact', 'Padding', 'loose');
-    title(tlo, 'FUS Gain vs Distance (Safe Stats + Clean Layout + SD)', 'FontSize', 24, 'FontWeight', 'bold');
+    tlo = tiledlayout(2, num_panels, 'TileSpacing', 'compact', 'Padding', 'loose');
+    title(tlo, 'FUS Gain vs Distance', 'FontSize', 11, 'FontWeight', 'bold');
 
     summary_rows = cell(0, 11);
+    group_p_values = nan(num_panels, num_distances);
+    cross_distance_p_values = nan(num_distances, num_distances, 2, num_panels);
 
     for t = 1:num_panels
-        ax = nexttile; hold(ax, 'on'); grid(ax, 'on');
+        ax = nexttile(tlo, t); hold(ax, 'on'); grid(ax, 'on');
         if t <= num_bins_to_plot
             data_slice = squeeze(local_corrected_gains(:, t, :));
         else
             data_slice = squeeze(nanmean(local_corrected_gains(:, 1:num_bins_to_plot, :), 2));
         end
 
-        title(ax, local_time_labels{t}, 'FontSize', 16, 'FontWeight', 'bold');
+        title(ax, local_time_labels{t}, 'FontSize', 10, 'FontWeight', 'bold');
         max_panel_y = 1.5;
+        panel_errorbar_top = 1.5;
+        for d = 1:num_distances
+            panel_values = data_slice(d, :);
+            panel_values = panel_values(isfinite(panel_values));
+            if ~isempty(panel_values)
+                panel_errorbar_top = max(panel_errorbar_top, mean(panel_values) + std(panel_values));
+            end
+        end
+        group_bracket_y = panel_errorbar_top + 0.20;
 
         for d = 1:num_distances
+            mL = NaN; sdL = NaN; p_L = NaN;
+            mH = NaN; sdH = NaN; p_H = NaN; p_anova = NaN;
             vL = data_slice(d, local_isL);
             vH = data_slice(d, local_isH);
             vL = vL(~isnan(vL));
             vH = vH(~isnan(vH));
+            vL = vL(:);
+            vH = vH(:);
 
             xL = d - 0.20;
             xH = d + 0.20;
 
             if ~isempty(vL)
-                scatter(ax, ones(size(vL))*xL, vL, 30, [0.2 0.4 0.8], 'filled', 'MarkerFaceAlpha', 0.25, 'HandleVisibility', 'off');
+                xL_points = xL + linspace(-0.08, 0.08, numel(vL)).';
+                scatter(ax, xL_points, vL, 18, [0.2 0.4 0.8], 'filled', ...
+                    'MarkerFaceAlpha', 0.55, 'MarkerEdgeColor', [0.1 0.25 0.55], ...
+                    'MarkerEdgeAlpha', 0.35, 'HandleVisibility', 'off');
                 mL = mean(vL); sdL = std(vL);
-                errorbar(ax, xL, mL, sdL, 'b', 'LineWidth', 2.5, 'Marker', 's', 'MarkerSize', 8);
+                errorbar(ax, xL, mL, sdL, 'b', 'LineWidth', 1.0, 'Marker', 's', 'MarkerSize', 4, 'CapSize', 4);
+                txt = sprintf('%.2f', mL);
                 if numel(vL) > 2
                     [~, p_L] = safe_1sample_ttest(vL, 1.0);
-                    txt = sprintf('%.2f', mL);
                     if p_L < 0.05
                         txt = sprintf('%s\n%s', txt, inline_p_formatter(p_L));
                     end
-                    text(ax, xL - 0.12, mL, txt, 'FontSize', 10, 'Color', 'b', 'FontWeight', 'bold', 'HorizontalAlignment', 'right', 'VerticalAlignment', 'middle');
                 end
+                text(ax, xL - 0.08, mL - 0.03, txt, 'FontSize', 7, 'Color', 'b', 'FontWeight', 'bold', 'HorizontalAlignment', 'right', 'VerticalAlignment', 'top');
             else
                 mL = NaN; sdL = NaN; p_L = NaN;
             end
 
             if ~isempty(vH)
-                scatter(ax, ones(size(vH))*xH, vH, 30, [0.8 0.2 0.2], 'filled', 'MarkerFaceAlpha', 0.25, 'HandleVisibility', 'off');
+                xH_points = xH + linspace(-0.08, 0.08, numel(vH)).';
+                scatter(ax, xH_points, vH, 18, [0.8 0.2 0.2], 'filled', ...
+                    'MarkerFaceAlpha', 0.55, 'MarkerEdgeColor', [0.55 0.1 0.1], ...
+                    'MarkerEdgeAlpha', 0.35, 'HandleVisibility', 'off');
                 mH = mean(vH); sdH = std(vH);
-                errorbar(ax, xH, mH, sdH, 'r', 'LineWidth', 2.5, 'Marker', 'o', 'MarkerSize', 8);
+                errorbar(ax, xH, mH, sdH, 'r', 'LineWidth', 1.0, 'Marker', 'o', 'MarkerSize', 4, 'CapSize', 4);
+                txt = sprintf('%.2f', mH);
                 if numel(vH) > 2
                     [~, p_H] = safe_1sample_ttest(vH, 1.0);
-                    txt = sprintf('%.2f', mH);
                     if p_H < 0.05
                         txt = sprintf('%s\n%s', txt, inline_p_formatter(p_H));
                     end
-                    text(ax, xH + 0.12, mH, txt, 'FontSize', 10, 'Color', 'r', 'FontWeight', 'bold', 'HorizontalAlignment', 'left', 'VerticalAlignment', 'middle');
                 end
+                text(ax, xH + 0.08, mH + 0.03, txt, 'FontSize', 7, 'Color', 'r', 'FontWeight', 'bold', 'HorizontalAlignment', 'left', 'VerticalAlignment', 'bottom');
             else
                 mH = NaN; sdH = NaN; p_H = NaN;
             end
 
             if numel(vL) > 2 && numel(vH) > 2
                 [~, p_anova] = safe_2sample_ttest(vL, vH);
-                if p_anova < 0.05
-                    top_of_data = max([mL + sdL, mH + sdH]);
-                    if isnan(top_of_data), top_of_data = 1.5; end
-                    bracket_y = top_of_data + 0.25;
-                    plot(ax, [xL, xL, xH, xH], [bracket_y-0.05, bracket_y, bracket_y, bracket_y-0.05], '-k', 'LineWidth', 1.5, 'HandleVisibility', 'off');
-                    text(ax, d, bracket_y + 0.1, inline_p_formatter(p_anova), 'FontSize', 11, 'Color', 'k', 'HorizontalAlignment', 'center', 'FontWeight', 'bold');
-                    max_panel_y = max(max_panel_y, bracket_y + 0.2);
-                end
-            else
-                p_anova = NaN;
             end
+            group_p_values(t, d) = p_anova;
 
             max_panel_y = max([max_panel_y, mL + sdL, mH + sdH]);
+
+            if isfinite(p_anova) && p_anova < 0.05
+                bracket_top = group_bracket_y;
+                bracket_y_base = bracket_top - 0.05;
+                plot(ax, [xL, xL, xH, xH], [bracket_y_base, bracket_top, bracket_top, bracket_y_base], ...
+                    'k-', 'LineWidth', 0.8, 'HandleVisibility', 'off');
+                plot(ax, [xL, xH], [bracket_top, bracket_top], ...
+                    'k-', 'LineWidth', 0.8, 'HandleVisibility', 'off');
+                text(ax, d, bracket_top + 0.06, inline_p_formatter(p_anova), ...
+                    'FontSize', 7, 'Color', 'k', 'HorizontalAlignment', 'center', 'FontWeight', 'bold');
+                max_panel_y = max(max_panel_y, bracket_top + 0.08);
+            end
 
             if ~isempty(vL)
                 summary_rows(end+1, :) = {local_time_labels{t}, local_distance_labels{d}, 'L', numel(vL), mL, sdL, p_L, p_L < 0.05, NaN, NaN, sprintf('%.6f,', vL)};
@@ -128,23 +152,30 @@ function plot_FUS_distance_dashboard_from_workspace()
             end
         end
 
-        set(ax, 'XTick', 1:num_distances, 'XTickLabel', local_distance_labels, 'FontSize', 11, 'FontWeight', 'bold');
+        [pairwise_max_y, panel_pairwise_p_values] = draw_nested_pairwise_brackets( ...
+            ax, data_slice, local_isL, local_isH, num_distances, group_bracket_y);
+        cross_distance_p_values(:, :, :, t) = panel_pairwise_p_values;
+        if ~isempty(pairwise_max_y)
+            max_panel_y = max(max_panel_y, pairwise_max_y);
+        end
+
+        set(ax, 'XTick', 1:num_distances, 'XTickLabel', local_distance_labels, 'FontSize', 7, 'FontWeight', 'bold');
         xtickangle(ax, 30);
         xlim(ax, [0.3, num_distances + 0.7]);
-        bracket_top = draw_nested_pairwise_brackets(ax, data_slice, local_isL, local_isH, num_distances);
-        if ~isempty(bracket_top)
-            max_panel_y = max(max_panel_y, bracket_top);
-        end
         ylim(ax, [0, max(2.5, max_panel_y + 0.2)]);
         line(ax, [0 num_distances+1], [1 1], 'Color', [0.2 0.7 0.2], 'LineStyle', '--', 'LineWidth', 2.0, 'DisplayName', 'Control Baseline (1.0)');
         if t == 1 || t == 4
-            ylabel(ax, 'Corrected Gain Ratio', 'FontSize', 14, 'FontWeight', 'bold');
+            ylabel(ax, 'Corrected Gain Ratio', 'FontSize', 8, 'FontWeight', 'bold');
         end
         legend(ax, 'off');
     end
 
-    annotation(fig, 'textbox', [0.75 0.12 0.18 0.08], 'String', {'Low Power (L)', 'High Power (H)', 'Control Baseline'}, 'FitBoxToText', 'on', 'BackgroundColor', 'white');
+    annotation(fig, 'textbox', [0.37 0.01 0.26 0.02], 'String', 'Blue=L   Red=H   dashed line=1.0', ...
+        'FitBoxToText', 'on', 'EdgeColor', 'none', 'FontSize', 6.5, 'HorizontalAlignment', 'center');
+    add_vertical_pvalue_colorbar(fig, [0.955 0.13 0.008 0.74], [0.1 0.3 0.8], 'L', 'left');
+    add_vertical_pvalue_colorbar(fig, [0.975 0.13 0.008 0.74], [0.8 0.1 0.1], 'H', 'right');
     export_dashboard_summary(summary_rows, 'FUS_distance_dashboard_summary.csv');
+    plot_cross_distance_pvalue_matrices(fig, tlo, cross_distance_p_values, local_distance_labels, local_time_labels(1:num_panels));
     fprintf('Figure generated. Use the MATLAB figure window to review the plot.\n');
 end
 
@@ -274,16 +305,21 @@ function [h, p] = safe_paired_ttest(x, y)
     h = double(p < 0.05);
 end
 
-function max_y = draw_nested_pairwise_brackets(ax, data_slice, isL, isH, num_distances)
+function [max_y, pairwise_p_values] = draw_nested_pairwise_brackets(ax, data_slice, isL, isH, num_distances, group_bracket_y)
     max_y = [];
     group_names = {'L', 'H'};
     group_masks = {isL, isH};
     group_colors = {[0.1 0.3 0.8], [0.8 0.1 0.1]};
-    base_range = max(data_slice(:)) - min(data_slice(:));
-    if isempty(base_range) || base_range <= 0
+    pairwise_p_values = nan(num_distances, num_distances, numel(group_names));
+    finite_data = data_slice(isfinite(data_slice));
+    if isempty(finite_data)
+        return;
+    end
+    base_range = max(finite_data) - min(finite_data);
+    if base_range <= 0
         base_range = 0.5;
     end
-    base_y = max(data_slice(:)) + 0.15 * base_range;
+    base_y = max(group_bracket_y + 0.20, max(finite_data) + 0.15 * base_range);
     max_y_val = base_y;
 
     for gi = 1:numel(group_names)
@@ -303,15 +339,17 @@ function max_y = draw_nested_pairwise_brackets(ax, data_slice, isL, isH, num_dis
                     continue;
                 end
                 [~, p_val] = safe_paired_ttest(x(valid), y(valid));
-                if p_val >= 0.05
+                pairwise_p_values(i, j, gi) = p_val;
+                pairwise_p_values(j, i, gi) = p_val;
+                if ~isfinite(p_val) || p_val >= 0.05
                     continue;
                 end
                 span = j - i;
                 offset = 0.08 * span + 0.05 * (gi - 1);
                 ytop = base_y + offset;
-                plot(ax, [x1, x1, x2, x2], [ytop-0.01, ytop, ytop, ytop-0.01], 'Color', group_colors{gi}, 'LineWidth', 1.5);
-                text(ax, mean([x1, x2]), ytop + 0.02 * base_range, sprintf('p=%.3f', p_val), ...
-                     'Color', group_colors{gi}, 'HorizontalAlignment', 'center', 'FontSize', 8, 'FontWeight', 'bold');
+                line_color = pvalue_line_color(group_colors{gi}, p_val);
+                plot(ax, [x1, x1, x2, x2], [ytop-0.01, ytop, ytop, ytop-0.01], ...
+                    'Color', line_color, 'LineWidth', 1.5, 'HandleVisibility', 'off');
                 max_y_val = max(max_y_val, ytop + 0.03 * base_range);
             end
         end
@@ -328,6 +366,126 @@ function labels = generate_default_time_labels(num_bins)
         labels{b} = sprintf('Bin %d', b);
     end
     labels{end} = sprintf('Session Average (Bins 1-%d)', num_bins);
+end
+
+function line_color = pvalue_line_color(base_color, p_val)
+    significance_strength = min(1, max(0, -log10(p_val / 0.05) / 3));
+    significance_strength = 0.25 + 0.75 * significance_strength;
+    line_color = 1 - significance_strength * (1 - base_color);
+end
+
+function plot_cross_distance_pvalue_matrices(fig, matrix_layout, p_values, distance_labels, panel_labels)
+    num_distances = numel(distance_labels);
+    num_panels = numel(panel_labels);
+    low_color = [0.1 0.3 0.8];
+    high_color = [0.8 0.1 0.1];
+
+    for t = 1:num_panels
+        ax = nexttile(matrix_layout, num_panels + t); hold(ax, 'on');
+        rgb_image = ones(num_distances, num_distances, 3);
+        for i = 1:num_distances
+            for j = 1:num_distances
+                if i == j
+                    rgb_image(i, j, :) = 0.92;
+                    continue;
+                end
+                if i > j
+                    p_val = p_values(i, j, 1, t);
+                    base_color = low_color;
+                else
+                    p_val = p_values(i, j, 2, t);
+                    base_color = high_color;
+                end
+                if isfinite(p_val)
+                    strength = pvalue_strength(p_val);
+                    rgb_image(i, j, :) = 1 - strength * (1 - base_color);
+                end
+            end
+        end
+        image(ax, rgb_image);
+        set(ax, 'Color', [0.92 0.92 0.92], 'YDir', 'reverse', ...
+            'XTick', 1:num_distances, 'YTick', 1:num_distances, ...
+            'XTickLabel', distance_labels, 'YTickLabel', distance_labels, ...
+            'FontSize', 6.5, 'TickLength', [0 0]);
+        xtickangle(ax, 45);
+        title(ax, sprintf('P-values: %s', panel_labels{t}), 'FontSize', 8, 'FontWeight', 'bold');
+        if t == 3
+            xlabel(ax, 'Distance', 'FontSize', 6);
+        end
+        if t == 1
+            ylabel(ax, 'Distance', 'FontSize', 6);
+        end
+        axis(ax, 'square');
+
+        for i = 1:num_distances
+            for j = 1:num_distances
+                if i == j
+                    text_value = '-';
+                    text_color = [0.35 0.35 0.35];
+                elseif i > j
+                    p_val = p_values(i, j, 1, t);
+                    text_value = format_matrix_pvalue(p_val);
+                    text_color = matrix_text_color(pvalue_strength(p_val));
+                else
+                    p_val = p_values(i, j, 2, t);
+                    text_value = format_matrix_pvalue(p_val);
+                    text_color = matrix_text_color(pvalue_strength(p_val));
+                end
+                text(ax, j, i, text_value, 'HorizontalAlignment', 'center', ...
+                    'FontSize', 6.2, 'FontWeight', 'bold', 'Color', text_color);
+            end
+        end
+        plot(ax, [0.5 num_distances+0.5], [0.5 num_distances+0.5], ...
+            'Color', [0.65 0.65 0.65], 'LineStyle', '--', 'HandleVisibility', 'off');
+    end
+    annotation(fig, 'textbox', [0.37 0.035 0.26 0.018], ...
+        'String', 'Lower triangle: low power   |   Upper triangle: high power', ...
+        'HorizontalAlignment', 'center', 'EdgeColor', 'none', 'FontSize', 6.5);
+end
+
+function add_vertical_pvalue_colorbar(fig, position, base_color, label, y_axis_location)
+    colorbar_ax = axes('Parent', fig, 'Position', position, 'Color', 'none', ...
+        'Box', 'on', 'FontSize', 5.5, 'YAxisLocation', y_axis_location);
+    p_scale = linspace(0.05, 0.001, 100);
+    rgb_image = zeros(numel(p_scale), 1, 3);
+    for k = 1:numel(p_scale)
+        rgb_image(k, 1, :) = pvalue_line_color(base_color, p_scale(k));
+    end
+    image(colorbar_ax, 1, 1:numel(p_scale), rgb_image);
+    set(colorbar_ax, 'YDir', 'normal', 'XTick', [], ...
+        'YTick', [1 34 67 100], 'YTickLabel', {'0.05', '0.033', '0.017', '0.001'}, ...
+        'TickLength', [0.02 0.02]);
+    ylim(colorbar_ax, [1 numel(p_scale)]);
+    xlim(colorbar_ax, [0.5 1.5]);
+    title(colorbar_ax, label, 'FontSize', 6.5, 'FontWeight', 'bold');
+end
+
+function strength = pvalue_strength(p_val)
+    if ~isfinite(p_val)
+        strength = 0;
+    elseif p_val < 0.05
+        strength = 0.25 + 0.75 * min(1, max(0, -log10(p_val / 0.05) / 3));
+    else
+        strength = 0.08;
+    end
+end
+
+function text_color = matrix_text_color(score)
+    if score > 0.45
+        text_color = [1 1 1];
+    else
+        text_color = [0.1 0.1 0.1];
+    end
+end
+
+function text_value = format_matrix_pvalue(p_val)
+    if ~isfinite(p_val)
+        text_value = '';
+    elseif p_val < 0.001
+        text_value = 'p<.001';
+    else
+        text_value = sprintf('%.3f', p_val);
+    end
 end
 
 function labels = ensure_time_labels(labels, num_bins)

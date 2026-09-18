@@ -115,8 +115,8 @@ for g = 1:2
     fprintf('  EXHAUSTIVE REPORT: %s\n', group_labels{g});
     fprintf('=======================================================================\n');
     
-    %% Step B: Cross-Sectional Analysis (Within Each Bin)
-    fprintf(' [CROSS-SECTIONAL LAYERS]:\n');
+    %% Step B: Within-Bin PC-to-PC Analysis (Only within a single bin)
+    fprintf(' [WITHIN-BIN PC-TO-PC LAYERS]:\n');
     for b = 1:num_bins
         bin_slice = squeeze(g_data(:, b, :)); 
         p1_idx = [1, 2, 1]; p2_idx = [2, 3, 3];
@@ -150,6 +150,7 @@ for g = 1:2
             cross_sectional_stats.(log_fieldname).delta_mean = mean_diff;
             cross_sectional_stats.(log_fieldname).p_value = p_val;
             
+            % Only show brackets when P < 0.05.
             if ~isnan(p_val) && p_val < 0.05
                 fprintf('    • Bin %d | PC%d vs PC%d -> Delta = %5.2f | p = %.4f*\n', b, idxA, idxB, mean_diff, p_val);
                 
@@ -174,17 +175,16 @@ for g = 1:2
         bin_local_maxes(b) = local_ceiling + (visible_bracket_count * 0.15);
     end
     
-    %% Step C: All-to-All Longitudinal Matrix Analysis (Any Time Point Shift)
-    fprintf('\n [ALL-TO-ALL LONGITUDINAL SHIFTS]:\n');
+    %% Step C: Same-PC Longitudinal Analysis (Compare each PC across bins while keeping inter-PC tests within-bin only)
+    fprintf('\n [SAME-PC LONGITUDINAL SHIFTS]:\n');
     longitudinal_ceiling = max(bin_local_maxes) + 0.12;
     longitudinal_bracket_layer = 0;
     
-    % Comprehensive combinatorial scanning loop
-    for b1 = 1:(num_bins - 1)
-        for b2 = (b1 + 1):num_bins
-            for p = 1:num_pcs
-                val_t1 = g_data(:, b1, p);
-                val_t2 = g_data(:, b2, p);
+    for p_focus = 1:num_pcs
+        for b1 = 1:(num_bins - 1)
+            for b2 = (b1 + 1):num_bins
+                val_t1 = g_data(:, b1, p_focus);
+                val_t2 = g_data(:, b2, p_focus);
                 
                 matched_mask = ~isnan(val_t1) & ~isnan(val_t2);
                 x_t1 = val_t1(matched_mask);
@@ -204,34 +204,31 @@ for g = 1:2
                     p_val = NaN;
                 end
                 
-                log_fieldname = sprintf('%s_PC%d_Bin%dto%d', p_prefix, p, b1, b2);
-                longitudinal_bin_stats.(log_fieldname).pc_channel = p;
+                log_fieldname = sprintf('%s_PC%d_Bin%dto%d', p_prefix, p_focus, b1, b2);
+                longitudinal_bin_stats.(log_fieldname).pc_channel = p_focus;
                 longitudinal_bin_stats.(log_fieldname).transition = sprintf('%s to %s', x_labels{b1}, x_labels{b2});
                 longitudinal_bin_stats.(log_fieldname).delta_mean = mean_diff;
                 longitudinal_bin_stats.(log_fieldname).p_value = p_val;
                 
-                % Render if significant
+                % Only show brackets when P < 0.05.
                 if ~isnan(p_val) && p_val < 0.05
                     fprintf('    • PC%d | %s vs %s -> Delta = %5.2f | p = %.4f*\n', ...
-                        p, x_labels{b1}, x_labels{b2}, mean_diff, p_val);
+                        p_focus, x_labels{b1}, x_labels{b2}, mean_diff, p_val);
                     
-                    if p_val < 0.001,     p_str = sprintf('PC%d [%d\\rightarrow%d] \\Delta:%.2f\np<0.001***', p, b1-1, b2-1, mean_diff);
-                    elseif p_val < 0.01,  p_str = sprintf('PC%d [%d\\rightarrow%d] \\Delta:%.2f\np=%.3f**', p, b1-1, b2-1, mean_diff, p_val);
-                    else,                 p_str = sprintf('PC%d [%d\\rightarrow%d] \\Delta:%.2f\np=%.3f*', p, b1-1, b2-1, mean_diff, p_val);
+                    if p_val < 0.001,     p_str = sprintf('PC%d [%d\\rightarrow%d] \\Delta:%.2f\np<0.001***', p_focus, b1-1, b2-1, mean_diff);
+                    elseif p_val < 0.01,  p_str = sprintf('PC%d [%d\\rightarrow%d] \\Delta:%.2f\np=%.3f**', p_focus, b1-1, b2-1, mean_diff, p_val);
+                    else,                 p_str = sprintf('PC%d [%d\\rightarrow%d] \\Delta:%.2f\np=%.3f*', p_focus, b1-1, b2-1, mean_diff, p_val);
                     end
                     
-                    % Anchor coordinates connect the same channel across the specified bins
-                    x1 = b1 + pc_offsets(p);
-                    x2 = b2 + pc_offsets(p);
-                    
+                    x1 = b1 + pc_offsets(p_focus);
+                    x2 = b2 + pc_offsets(p_focus);
                     y_bar = longitudinal_ceiling + (longitudinal_bracket_layer * 0.20);
                     tick_h = 0.04;
                     
-                    % Render a high-arched bridge bridging the target timeframes
                     plot([x1, x1, x2, x2], [y_bar-tick_h, y_bar, y_bar, y_bar-tick_h], ...
-                        'Color', pc_colors(p,:), 'LineWidth', 1.5, 'LineStyle', '-', 'HandleVisibility', 'off');
+                        'Color', pc_colors(p_focus,:), 'LineWidth', 1.5, 'LineStyle', '-', 'HandleVisibility', 'off');
                     
-                    text((x1+x2)/2, y_bar + 0.01, p_str, 'Color', pc_colors(p,:), ...
+                    text((x1+x2)/2, y_bar + 0.01, p_str, 'Color', pc_colors(p_focus,:), ...
                         'FontSize', 10, 'FontWeight', 'bold', 'HorizontalAlignment', 'center', 'VerticalAlignment', 'bottom');
                     
                     longitudinal_bracket_layer = longitudinal_bracket_layer + 1;
