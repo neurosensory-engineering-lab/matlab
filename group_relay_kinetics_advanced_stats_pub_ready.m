@@ -61,6 +61,11 @@ pc_markers = {'s', '^', 'o'};
 
 cross_sectional_stats = struct();
 longitudinal_bin_stats = struct();
+stats_export_rows = struct('Analysis', {}, 'Group', {}, 'GroupPrefix', {}, ...
+    'Bin1', {}, 'Bin2', {}, 'Comparison', {}, 'PC1', {}, 'PC2', {}, ...
+    'Timepoint1', {}, 'Timepoint2', {}, 'N', {}, 'Mean1', {}, 'Mean2', {}, ...
+    'MeanDifference', {}, 'DifferenceSD', {}, 'TStatistic', {}, ...
+    'DegreesOfFreedom', {}, 'PValue', {}, 'Significant05', {});
 
 %% 2. GENERATE PANELS
 figClean = figure(14000); clf;
@@ -136,19 +141,36 @@ for g = 1:2
             
             if n_pairs >= 2
                 diff_vec = xB - xA;
-                if std(diff_vec) > 0
-                    t_stat = mean(diff_vec) / (std(diff_vec) / sqrt(n_pairs));
+                diff_sd = std(diff_vec);
+                if diff_sd > 0
+                    t_stat = mean(diff_vec) / (diff_sd / sqrt(n_pairs));
                     p_val = 2 * (1 - tcdf(abs(t_stat), n_pairs - 1));
                 else
-                    p_val = 1.0; 
+                    t_stat = 0;
+                    p_val = 1.0;
                 end
+                degrees_of_freedom = n_pairs - 1;
             else
+                diff_sd = NaN;
+                t_stat = NaN;
+                degrees_of_freedom = NaN;
                 p_val = NaN;
             end
             
             log_fieldname = sprintf('%s_Bin%d_PC%dto%d', p_prefix, b, idxA, idxB);
             cross_sectional_stats.(log_fieldname).delta_mean = mean_diff;
             cross_sectional_stats.(log_fieldname).p_value = p_val;
+            stats_export_rows(end + 1) = struct( ...
+                'Analysis', 'Within-bin PC comparison', ...
+                'Group', group_labels{g}, 'GroupPrefix', p_prefix, ...
+                'Bin1', b, 'Bin2', b, ...
+                'Comparison', sprintf('PC%d vs PC%d', idxA, idxB), ...
+                'PC1', idxA, 'PC2', idxB, ...
+                'Timepoint1', x_labels{b}, 'Timepoint2', x_labels{b}, ...
+                'N', n_pairs, 'Mean1', mean(xA), 'Mean2', mean(xB), ...
+                'MeanDifference', mean_diff, 'DifferenceSD', diff_sd, ...
+                'TStatistic', t_stat, 'DegreesOfFreedom', degrees_of_freedom, ...
+                'PValue', p_val, 'Significant05', ~isnan(p_val) && p_val < 0.05);
             
             % Only show brackets when P < 0.05.
             if ~isnan(p_val) && p_val < 0.05
@@ -194,13 +216,19 @@ for g = 1:2
                 
                 if n_pairs >= 2
                     diff_vec = x_t2 - x_t1;
-                    if std(diff_vec) > 0
-                        t_stat = mean(diff_vec) / (std(diff_vec) / sqrt(n_pairs));
+                    diff_sd = std(diff_vec);
+                    if diff_sd > 0
+                        t_stat = mean(diff_vec) / (diff_sd / sqrt(n_pairs));
                         p_val = 2 * (1 - tcdf(abs(t_stat), n_pairs - 1));
                     else
+                        t_stat = 0;
                         p_val = 1.0;
                     end
+                    degrees_of_freedom = n_pairs - 1;
                 else
+                    diff_sd = NaN;
+                    t_stat = NaN;
+                    degrees_of_freedom = NaN;
                     p_val = NaN;
                 end
                 
@@ -209,6 +237,17 @@ for g = 1:2
                 longitudinal_bin_stats.(log_fieldname).transition = sprintf('%s to %s', x_labels{b1}, x_labels{b2});
                 longitudinal_bin_stats.(log_fieldname).delta_mean = mean_diff;
                 longitudinal_bin_stats.(log_fieldname).p_value = p_val;
+                stats_export_rows(end + 1) = struct( ...
+                    'Analysis', 'Same-PC longitudinal comparison', ...
+                    'Group', group_labels{g}, 'GroupPrefix', p_prefix, ...
+                    'Bin1', b1, 'Bin2', b2, ...
+                    'Comparison', sprintf('PC%d', p_focus), ...
+                    'PC1', p_focus, 'PC2', p_focus, ...
+                    'Timepoint1', x_labels{b1}, 'Timepoint2', x_labels{b2}, ...
+                    'N', n_pairs, 'Mean1', mean(x_t1), 'Mean2', mean(x_t2), ...
+                    'MeanDifference', mean_diff, 'DifferenceSD', diff_sd, ...
+                    'TStatistic', t_stat, 'DegreesOfFreedom', degrees_of_freedom, ...
+                    'PValue', p_val, 'Significant05', ~isnan(p_val) && p_val < 0.05);
                 
                 % Only show brackets when P < 0.05.
                 if ~isnan(p_val) && p_val < 0.05
@@ -258,6 +297,12 @@ for g = 1:2
         legend('Location', 'southwest', 'FontSize', 13, 'Box', 'off');
     end
 end
+
+stats_table = struct2table(stats_export_rows);
+stats_csv_filename = 'group_relay_kinetics_stats.csv';
+writetable(stats_table, stats_csv_filename);
+assignin('base', 'stats_table', stats_table);
+fprintf('>>> Statistics exported to %s (%d comparisons).\n', stats_csv_filename, height(stats_table));
 
 % Assign structures to workspace
 assignin('base', 'cross_sectional_stats', cross_sectional_stats);
