@@ -169,6 +169,8 @@ function plot_PC1_percentile_dashboard_from_workspace()
     add_vertical_pvalue_colorbar(fig, [0.955 0.13 0.008 0.74], [0.1 0.3 0.8], 'L', 'left');
     add_vertical_pvalue_colorbar(fig, [0.975 0.13 0.008 0.74], [0.8 0.1 0.1], 'H', 'right');
     export_dashboard_summary(summary_rows, 'PC1_percentile_dashboard_summary.csv');
+    export_cross_bin_pvalue_matrices(cross_bin_p_values, local_bracket_labels, local_time_labels, ...
+        'PC1_percentile_cross_bin_pvalue_matrices.csv');
     plot_cross_bin_pvalue_matrices(fig, tlo, cross_bin_p_values, local_bracket_labels, local_time_labels);
     fprintf('Figure generated. Use the MATLAB figure window to review the plot.\n');
 end
@@ -489,4 +491,47 @@ function export_dashboard_summary(summary_rows, file_name)
     output_path = fullfile(fileparts(mfilename('fullpath')), file_name);
     writetable(summary_table, output_path);
     fprintf('Saved dashboard summary to %s\n', output_path);
+end
+
+function export_cross_bin_pvalue_matrices(p_values, bracket_labels, panel_labels, file_name)
+    % Store each matrix cell as one row so the CSV remains unambiguous and filterable.
+    group_names = {'L', 'H'};
+    num_brackets = numel(bracket_labels);
+    num_panels = numel(panel_labels);
+    matrix_rows = cell(0, 11);
+
+    for t = 1:num_panels
+        for i = 1:num_brackets
+            for j = 1:num_brackets
+                if i == j
+                    comparison_group = 'Diagonal';
+                    triangle = 'Diagonal';
+                    p_val = NaN;
+                    display_value = '-';
+                elseif i > j
+                    comparison_group = group_names{1};
+                    triangle = 'Lower';
+                    p_val = p_values(i, j, 1, t);
+                    display_value = format_matrix_pvalue(p_val);
+                else
+                    comparison_group = group_names{2};
+                    triangle = 'Upper';
+                    p_val = p_values(i, j, 2, t);
+                    display_value = format_matrix_pvalue(p_val);
+                end
+
+                matrix_rows(end+1, :) = {t, panel_labels{t}, comparison_group, triangle, ...
+                    i, bracket_labels{i}, j, bracket_labels{j}, p_val, display_value, ...
+                    p_val < 0.05};
+            end
+        end
+    end
+
+    matrix_table = cell2table(matrix_rows, 'VariableNames', {...
+        'panel_index', 'panel_label', 'comparison_group', 'triangle', ...
+        'row_index', 'row_bracket_label', 'column_index', 'column_bracket_label', ...
+        'p_value', 'matrix_display_value', 'significant_at_0_05'});
+    output_path = fullfile(fileparts(mfilename('fullpath')), file_name);
+    writetable(matrix_table, output_path);
+    fprintf('Saved cross-bin p-value matrices to %s\n', output_path);
 end
