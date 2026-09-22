@@ -27,17 +27,20 @@ function plot_PC1_percentile_dashboard_from_workspace()
 
     if evalin('base', 'exist(''time_labels'',''var'')')
         local_time_labels = evalin('base', 'time_labels');
-        local_time_labels = ensure_time_labels(local_time_labels, num_bins_to_plot);
+        local_time_labels = ensure_time_labels(local_time_labels, num_bins);
     else
-        local_time_labels = generate_default_time_labels(num_bins_to_plot);
+        local_time_labels = generate_default_time_labels(num_bins);
     end
 
-    if numel(local_time_labels) < num_bins_to_plot + 1
-        local_time_labels = ensure_time_labels(local_time_labels, num_bins_to_plot);
+    if numel(local_time_labels) < num_bins + 1
+        local_time_labels = ensure_time_labels(local_time_labels, num_bins);
     end
-    if numel(local_time_labels) >= num_bins_to_plot + 1
-        local_time_labels{num_bins_to_plot + 1} = 'Session Average';
+    if numel(local_time_labels) >= num_bins + 1
+        local_time_labels{num_bins + 1} = 'Session Average';
     end
+
+    export_corrected_gains(local_corrected_gains, local_bracket_labels, local_time_labels, ...
+        'corrected_gains_long.csv', 'corrected_gains.mat');
 
     fig = figure('Name', 'PCA Percentile Dashboard', 'Color', 'w', 'Position', [20 20 1800 1440]);
     set(fig, 'PaperUnits', 'inches', 'PaperPosition', [0 0 6.0 4.8], ...
@@ -46,7 +49,7 @@ function plot_PC1_percentile_dashboard_from_workspace()
     tlo = tiledlayout(2, num_panels, 'TileSpacing', 'compact', 'Padding', 'loose');
     title(tlo, 'FUS Gain vs PC1 Functional Percentile', 'FontSize', 11, 'FontWeight', 'bold');
 
-    summary_rows = cell(0, 11);
+    data_rows = cell(0, 14);
     results_cell = cell(0, 9);
     group_p_values = nan(num_panels, num_brackets);
     cross_bin_p_values = nan(num_brackets, num_brackets, 2, num_panels);
@@ -128,8 +131,16 @@ function plot_PC1_percentile_dashboard_from_workspace()
 
             max_panel_y = max([max_panel_y, mL + sdL, mH + sdH]);
             results_cell(end+1, :) = {local_time_labels{t}, safe_get_label(local_bracket_labels, p), mL, sdL, p_L, mH, sdH, p_H, p_anova};
-            summary_rows(end+1, :) = {local_time_labels{t}, safe_get_label(local_bracket_labels, p), 'L', numel(vL), mL, sdL, p_L, p_L < 0.05, p_anova, p_anova < 0.05, sprintf('%.6f,', vL)};
-            summary_rows(end+1, :) = {local_time_labels{t}, safe_get_label(local_bracket_labels, p), 'H', numel(vH), mH, sdH, p_H, p_H < 0.05, p_anova, p_anova < 0.05, sprintf('%.6f,', vH)};
+            for observation_index = 1:numel(vL)
+                data_rows(end+1, :) = {t, local_time_labels{t}, p, safe_get_label(local_bracket_labels, p), ...
+                    'L', observation_index, vL(observation_index), numel(vL), mL, sdL, ...
+                    p_L, p_L < 0.05, p_anova, p_anova < 0.05};
+            end
+            for observation_index = 1:numel(vH)
+                data_rows(end+1, :) = {t, local_time_labels{t}, p, safe_get_label(local_bracket_labels, p), ...
+                    'H', observation_index, vH(observation_index), numel(vH), mH, sdH, ...
+                    p_H, p_H < 0.05, p_anova, p_anova < 0.05};
+            end
 
             if isfinite(p_anova) && p_anova < 0.05
                 bracket_top = group_bracket_y;
@@ -168,7 +179,7 @@ function plot_PC1_percentile_dashboard_from_workspace()
         'FitBoxToText', 'on', 'EdgeColor', 'none', 'FontSize', 6.5, 'HorizontalAlignment', 'center');
     add_vertical_pvalue_colorbar(fig, [0.955 0.13 0.008 0.74], [0.1 0.3 0.8], 'L', 'left');
     add_vertical_pvalue_colorbar(fig, [0.975 0.13 0.008 0.74], [0.8 0.1 0.1], 'H', 'right');
-    export_dashboard_summary(summary_rows, 'PC1_percentile_dashboard_summary.csv');
+    export_dashboard_summary(data_rows, 'PC1_percentile_dashboard_summary.csv');
     export_cross_bin_pvalue_matrices(cross_bin_p_values, local_bracket_labels, local_time_labels, ...
         'PC1_percentile_cross_bin_pvalue_matrices.csv');
     plot_cross_bin_pvalue_matrices(fig, tlo, cross_bin_p_values, local_bracket_labels, local_time_labels);
@@ -479,18 +490,48 @@ function p_str = inline_p_formatter(p_val)
     end
 end
 
-function export_dashboard_summary(summary_rows, file_name)
-    if isempty(summary_rows)
-        summary_table = table();
+function export_dashboard_summary(data_rows, file_name)
+    if isempty(data_rows)
+        data_table = table();
     else
-        summary_table = cell2table(summary_rows, 'VariableNames', {...
-            'panel_label', 'spatial_label', 'intensity', 'n_observations', 'mean_gain', 'sd_gain', ...
-            'baseline_p_value', 'baseline_significant', 'group_comparison_p_value', 'group_comparison_significant', 'raw_gain_values'});
+        data_table = cell2table(data_rows, 'VariableNames', {...
+            'panel_index', 'panel_label', 'bracket_index', 'bracket_label', 'intensity', ...
+            'observation_index', 'gain', 'n_observations', 'mean_gain', 'sd_gain', ...
+            'baseline_p_value', 'baseline_significant', 'group_comparison_p_value', ...
+            'group_comparison_significant'});
     end
 
     output_path = fullfile(fileparts(mfilename('fullpath')), file_name);
-    writetable(summary_table, output_path);
-    fprintf('Saved dashboard summary to %s\n', output_path);
+    writetable(data_table, output_path);
+    fprintf('Saved dashboard datapoints and statistics to %s\n', output_path);
+end
+
+function export_corrected_gains(corrected_gains, bracket_labels, time_labels, csv_file_name, mat_file_name)
+    % Store every array element with its three indices so the CSV is unambiguous.
+    array_size = size(corrected_gains);
+    if numel(array_size) ~= 3
+        error('corrected_gains must be a 3-D array.');
+    end
+
+    [bracket_index, bin_index, observation_index] = ndgrid( ...
+        1:array_size(1), 1:array_size(2), 1:array_size(3));
+    num_values = numel(corrected_gains);
+    corrected_gains_table = table( ...
+        bracket_index(:), bin_index(:), observation_index(:), corrected_gains(:), ...
+        'VariableNames', {'bracket_index', 'bin_index', 'observation_index', 'corrected_gain'});
+    corrected_gains_table.bracket_label = bracket_labels(bracket_index(:));
+    corrected_gains_table.bin_label = time_labels(bin_index(:));
+    corrected_gains_table = movevars(corrected_gains_table, ...
+        {'bracket_label', 'bin_label'}, 'After', 'bracket_index');
+
+    output_directory = fileparts(mfilename('fullpath'));
+    csv_output_path = fullfile(output_directory, csv_file_name);
+    writetable(corrected_gains_table, csv_output_path);
+
+    corrected_gains_output_path = fullfile(output_directory, mat_file_name);
+    save(corrected_gains_output_path, 'corrected_gains', '-v7');
+    fprintf('Saved %d corrected_gains values to %s and %s\n', num_values, ...
+        csv_output_path, corrected_gains_output_path);
 end
 
 function export_cross_bin_pvalue_matrices(p_values, bracket_labels, panel_labels, file_name)
