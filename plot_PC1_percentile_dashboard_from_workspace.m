@@ -180,9 +180,10 @@ function plot_PC1_percentile_dashboard_from_workspace()
     add_vertical_pvalue_colorbar(fig, [0.955 0.13 0.008 0.74], [0.1 0.3 0.8], 'L', 'left');
     add_vertical_pvalue_colorbar(fig, [0.975 0.13 0.008 0.74], [0.8 0.1 0.1], 'H', 'right');
     export_dashboard_summary(data_rows, 'PC1_percentile_dashboard_summary.csv');
-    export_cross_bin_pvalue_matrices(cross_bin_p_values, local_bracket_labels, local_time_labels, ...
+    panel_time_labels = local_time_labels(1:num_panels);
+    export_cross_bin_pvalue_matrices(cross_bin_p_values, local_bracket_labels, panel_time_labels, ...
         'PC1_percentile_cross_bin_pvalue_matrices.csv');
-    plot_cross_bin_pvalue_matrices(fig, tlo, cross_bin_p_values, local_bracket_labels, local_time_labels);
+    plot_cross_bin_pvalue_matrices(fig, tlo, cross_bin_p_values, local_bracket_labels, panel_time_labels);
     fprintf('Figure generated. Use the MATLAB figure window to review the plot.\n');
 end
 
