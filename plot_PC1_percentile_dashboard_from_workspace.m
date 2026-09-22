@@ -519,8 +519,8 @@ function export_corrected_gains(corrected_gains, bracket_labels, time_labels, cs
     corrected_gains_table = table( ...
         bracket_index(:), bin_index(:), observation_index(:), corrected_gains(:), ...
         'VariableNames', {'bracket_index', 'bin_index', 'observation_index', 'corrected_gain'});
-    corrected_gains_table.bracket_label = bracket_labels(bracket_index(:));
-    corrected_gains_table.bin_label = time_labels(bin_index(:));
+    corrected_gains_table.bracket_label = reshape(bracket_labels(bracket_index(:)), [], 1);
+    corrected_gains_table.bin_label = reshape(time_labels(bin_index(:)), [], 1);
     corrected_gains_table = movevars(corrected_gains_table, ...
         {'bracket_label', 'bin_label'}, 'After', 'bracket_index');
 
