@@ -40,7 +40,7 @@ function plot_PC1_percentile_dashboard_from_workspace()
     end
 
     export_corrected_gains(local_corrected_gains, local_bracket_labels, local_time_labels, ...
-        'corrected_gains_long.csv', 'corrected_gains.mat');
+        'corrected_gains_long.csv');
 
     fig = figure('Name', 'PCA Percentile Dashboard', 'Color', 'w', 'Position', [20 20 1800 1440]);
     set(fig, 'PaperUnits', 'inches', 'PaperPosition', [0 0 6.0 4.8], ...
@@ -507,7 +507,7 @@ function export_dashboard_summary(data_rows, file_name)
     fprintf('Saved dashboard datapoints and statistics to %s\n', output_path);
 end
 
-function export_corrected_gains(corrected_gains, bracket_labels, time_labels, csv_file_name, mat_file_name)
+function export_corrected_gains(corrected_gains, bracket_labels, time_labels, csv_file_name)
     % Store every array element with its three indices so the CSV is unambiguous.
     array_size = size(corrected_gains);
     if numel(array_size) ~= 3
@@ -528,11 +528,7 @@ function export_corrected_gains(corrected_gains, bracket_labels, time_labels, cs
     output_directory = fileparts(mfilename('fullpath'));
     csv_output_path = fullfile(output_directory, csv_file_name);
     writetable(corrected_gains_table, csv_output_path);
-
-    corrected_gains_output_path = fullfile(output_directory, mat_file_name);
-    save(corrected_gains_output_path, 'corrected_gains', '-v7');
-    fprintf('Saved %d corrected_gains values to %s and %s\n', num_values, ...
-        csv_output_path, corrected_gains_output_path);
+    fprintf('Saved %d corrected_gains values to %s\n', num_values, csv_output_path);
 end
 
 function export_cross_bin_pvalue_matrices(p_values, bracket_labels, panel_labels, file_name)
