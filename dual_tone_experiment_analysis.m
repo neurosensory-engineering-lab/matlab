@@ -1,7 +1,7 @@
 %% ========================================================================
 %  DT-ONLY BINNED SPATIAL SPECIFICITY ANALYSIS WITH DUAL-TONE INTERACTION ENGINE
 % ========================================================================
-% 1. DATA EXTRACTION: Extracts 10kHz and 30kHz trial traces inside the 10kHz focus.
+% 1. DATA EXTRACTION: Extracts both probe frequencies from the 10kHz and 30kHz PC1 ROIs.
 % 2. ROW FIX: Scans the ENTIRE spreadsheet row space to capture DT trials above C1.
 % 3. PATH VERIFICATION: Intelligently ensures trailing slashes are handled before loading .tif files.
 % 4. CASE SAFETY NET: Handles workspace variables named with either 'kHz' or 'KHz'.
@@ -66,6 +66,21 @@ FINAL_Z   = 5.0;
 num_bins = 10;
 G10_all = nan(num_exps, num_bins); % 10k stim @ 10k ROI
 G30_all = nan(num_exps, num_bins); % 30k stim @ 10k ROI
+G10_at_30_all = nan(num_exps, num_bins); % 10k stim @ full 30k ROI
+G30_at_30_all = nan(num_exps, num_bins); % 30k stim @ full 30k ROI
+G10_at_30_specific_all = nan(num_exps, num_bins); % 10k stim @ 30k-only ROI
+G30_at_30_specific_all = nan(num_exps, num_bins); % 30k stim @ 30k-only ROI
+
+mask10_pixels = nan(num_exps, 1);
+mask30_pixels = nan(num_exps, 1);
+mask30_specific_pixels = nan(num_exps, 1);
+overlap_pixels = nan(num_exps, 1);
+dice_10_30 = nan(num_exps, 1);
+centroid_separation_pixels = nan(num_exps, 1);
+components10 = nan(num_exps, 1);
+components30 = nan(num_exps, 1);
+num_pre_by_exp = nan(num_exps, 1);
+num_post_by_exp = nan(num_exps, 1);
 
 maskOutputDir = fullfile(pwd, 'dual_tone_pc_masks');
 if ~exist(maskOutputDir, 'dir')
@@ -117,20 +132,40 @@ for idx = 1:num_exps
     % --- DEFINE ROIs ---
     mask_10 = (PC1_10 > 0.9);
     mask_30 = (PC1_30 > 0.9);
-    masks = {mask_10, mask_30};
-    num_rois = 2;
+    mask_30_specific = mask_30 & ~mask_10;
+    masks = {mask_10, mask_30, mask_30_specific};
+    num_rois = 3;
+
+    mask10_pixels(idx) = nnz(mask_10);
+    mask30_pixels(idx) = nnz(mask_30);
+    mask30_specific_pixels(idx) = nnz(mask_30_specific);
+    overlap_pixels(idx) = nnz(mask_10 & mask_30);
+    dice_10_30(idx) = 2 * overlap_pixels(idx) / max(mask10_pixels(idx) + mask30_pixels(idx), 1);
+    [rows10, cols10] = find(mask_10);
+    [rows30, cols30] = find(mask_30);
+    if ~isempty(rows10) && ~isempty(rows30)
+        centroid10 = [mean(cols10), mean(rows10)];
+        centroid30 = [mean(cols30), mean(rows30)];
+        centroid_separation_pixels(idx) = norm(centroid10 - centroid30);
+    end
+    components10(idx) = bwconncomp(mask_10).NumObjects;
+    components30(idx) = bwconncomp(mask_30).NumObjects;
 
     safeBaseID = regexprep(baseID, '[^A-Za-z0-9_-]', '_');
     imwrite(uint8(mask_10) * 255, ...
         fullfile(maskOutputDir, [safeBaseID '_PC1_10kHz_mask.tif']), 'tif');
     imwrite(uint8(mask_30) * 255, ...
         fullfile(maskOutputDir, [safeBaseID '_PC1_30kHz_mask.tif']), 'tif');
+    imwrite(uint8(mask_30_specific) * 255, ...
+        fullfile(maskOutputDir, [safeBaseID '_PC1_30kHz_specific_mask.tif']), 'tif');
     fprintf('  Exported PC masks to %s\n', maskOutputDir);
     
     % --- PATH RESOLUTION (Using exact column names from your table) ---
     baseDir = char(rawTable{r_10, 'Folder path'});
     numPre  = double(rawTable{r_10, 'number of pre set 1 trials'});
     numPost = double(rawTable{r_10, 'number of post trials'});
+    num_pre_by_exp(idx) = numPre;
+    num_post_by_exp(idx) = numPost;
     
     prePath_10  = fullfile(baseDir, 'pre_10kHz_set_1');
     prePath_30  = fullfile(baseDir, 'pre_30kHz_set_1'); 
@@ -147,10 +182,10 @@ for idx = 1:num_exps
         pre_traces_30 = robust_multimask_extract(prePath_30, 1, numPre, ...
             numpix, baseline_idx, masks, num_rois);
         
-        pre_peaks_10 = nan(2,1);
-        pre_peaks_30 = nan(2,1);
+        pre_peaks_10 = nan(num_rois,1);
+        pre_peaks_30 = nan(num_rois,1);
         
-        for roi_idx = 1:2
+        for roi_idx = 1:num_rois
             [pre_peaks_10(roi_idx), ~] = apply_strict_qc( ...
                 pre_traces_10(:,:,roi_idx), baseline_idx, resp_win, ...
                 detrendTrace, THRESH_SD, 0);
@@ -174,22 +209,22 @@ for idx = 1:num_exps
             post30 = robust_multimask_extract(postPath_30, startT, endT, ...
                 numpix, baseline_idx, masks, num_rois);
             
-            % Isolate ROI 1 (The 10kHz Focus Centroid Location)
-            roi = 1; 
-            
-            [p10, ~] = apply_strict_qc(post10(:,:,roi), ...
-                baseline_idx, resp_win, detrendTrace, THRESH_SD, FINAL_Z);
-            
-            [p30, ~] = apply_strict_qc(post30(:,:,roi), ...
-                baseline_idx, resp_win, detrendTrace, THRESH_SD, FINAL_Z);
-            
-            % Baseline Normalization
-            if ~isnan(pre_peaks_10(roi))
-                G10_all(idx, b) = p10 / (pre_peaks_10(roi) + eps);
+            post_peaks_10 = nan(num_rois, 1);
+            post_peaks_30 = nan(num_rois, 1);
+            for roi_idx = 1:num_rois
+                [post_peaks_10(roi_idx), ~] = apply_strict_qc(post10(:,:,roi_idx), ...
+                    baseline_idx, resp_win, detrendTrace, THRESH_SD, FINAL_Z);
+                [post_peaks_30(roi_idx), ~] = apply_strict_qc(post30(:,:,roi_idx), ...
+                    baseline_idx, resp_win, detrendTrace, THRESH_SD, FINAL_Z);
             end
-            if ~isnan(pre_peaks_30(roi))
-                G30_all(idx, b) = p30 / (pre_peaks_30(roi) + eps);
-            end
+
+            % Normalize each probe/ROI combination to its matching pre-FUS baseline.
+            G10_all(idx, b) = normalized_gain(post_peaks_10(1), pre_peaks_10(1));
+            G30_all(idx, b) = normalized_gain(post_peaks_30(1), pre_peaks_30(1));
+            G10_at_30_all(idx, b) = normalized_gain(post_peaks_10(2), pre_peaks_10(2));
+            G30_at_30_all(idx, b) = normalized_gain(post_peaks_30(2), pre_peaks_30(2));
+            G10_at_30_specific_all(idx, b) = normalized_gain(post_peaks_10(3), pre_peaks_10(3));
+            G30_at_30_specific_all(idx, b) = normalized_gain(post_peaks_30(3), pre_peaks_30(3));
         end
         fprintf('\n');
     catch ME
@@ -306,12 +341,63 @@ averagedPlotData = table((1:num_bins)', mean10', sem10', mean30', sem30', ...
 statisticsData = table((1:num_bins)', delta_gains, p_values, n_pairs_by_bin, ...
     'VariableNames', {'TimeBin', 'DeltaGain_30minus10', 'PairedPValue', 'NPaired'});
 
+probeRoiGains = {G10_all, G30_all, G10_at_30_all, G30_at_30_all, ...
+    G10_at_30_specific_all, G30_at_30_specific_all};
+probeRoiProbes = {'10 kHz', '30 kHz', '10 kHz', '30 kHz', '10 kHz', '30 kHz'};
+probeRoiNames = {'10 kHz PC1 mask', '10 kHz PC1 mask', ...
+    '30 kHz PC1 mask (full)', '30 kHz PC1 mask (full)', ...
+    '30 kHz PC1 mask (disjoint)', '30 kHz PC1 mask (disjoint)'};
+probeRoiValidity = {valid_mask, valid_mask, ...
+    ~isnan(G10_at_30_all) & ~isnan(G30_at_30_all), ...
+    ~isnan(G10_at_30_all) & ~isnan(G30_at_30_all), ...
+    ~isnan(G10_at_30_specific_all) & ~isnan(G30_at_30_specific_all), ...
+    ~isnan(G10_at_30_specific_all) & ~isnan(G30_at_30_specific_all)};
+probeRoiRows = num_exps * num_bins * numel(probeRoiGains);
+probeRoiExperiment = strings(probeRoiRows, 1);
+probeRoiProbe = strings(probeRoiRows, 1);
+probeRoiName = strings(probeRoiRows, 1);
+probeRoiTimeBin = zeros(probeRoiRows, 1);
+probeRoiGain = nan(probeRoiRows, 1);
+probeRoiIncluded = false(probeRoiRows, 1);
+row = 0;
+for b = 1:num_bins
+    for idx = 1:num_exps
+        for series = 1:numel(probeRoiGains)
+            row = row + 1;
+            probeRoiExperiment(row) = experimentNames(idx);
+            probeRoiProbe(row) = probeRoiProbes{series};
+            probeRoiName(row) = probeRoiNames{series};
+            probeRoiTimeBin(row) = b;
+            probeRoiGain(row) = probeRoiGains{series}(idx, b);
+            probeRoiIncluded(row) = probeRoiValidity{series}(idx, b);
+        end
+    end
+end
+probeRoiData = table(probeRoiExperiment, probeRoiProbe, probeRoiName, ...
+    probeRoiTimeBin, probeRoiGain, probeRoiIncluded, ...
+    'VariableNames', {'Experiment', 'ProbeFrequency', 'ROI', 'TimeBin', ...
+    'RawGain', 'PlotIncluded'});
+geometryData = table(experimentNames, mask10_pixels, mask30_pixels, ...
+    mask30_specific_pixels, overlap_pixels, dice_10_30, centroid_separation_pixels, ...
+    components10, components30, num_pre_by_exp, num_post_by_exp, ...
+    'VariableNames', {'Experiment', 'Mask10Pixels', 'Mask30Pixels', ...
+    'Mask30SpecificPixels', 'OverlapPixels', 'Dice10vs30', ...
+    'CentroidSeparationPixels', 'Mask10Components', 'Mask30Components', ...
+    'NumPreTrials', 'NumPostTrials'});
+parametersData = table({'PC1 map threshold'; 'Baseline frame indices'; ...
+    'Response frame indices'; 'Bin width trials'}, ...
+    {'0.9'; mat2str(baseline_idx); mat2str(resp_win); '10'}, ...
+    'VariableNames', {'Parameter', 'Value'});
+
 if exist(outputFile, 'file')
     delete(outputFile);
 end
 writetable(rawPlotData, outputFile, 'Sheet', 'RawPlotData');
 writetable(averagedPlotData, outputFile, 'Sheet', 'AveragedPlotData');
 writetable(statisticsData, outputFile, 'Sheet', 'Statistics');
+writetable(probeRoiData, outputFile, 'Sheet', 'ProbeROIData');
+writetable(geometryData, outputFile, 'Sheet', 'MaskGeometry');
+writetable(parametersData, outputFile, 'Sheet', 'AnalysisParameters');
 fprintf('\n>>> Plotting data exported to %s\n', outputFile);
 
 %% ============================================================
@@ -461,5 +547,13 @@ function [mean_peak, m_keep] = apply_strict_qc(traces, base_idx, resp_win, detre
     else
         clean_tr = detrend_fn(mean(traces(:, m_keep), 2));
         mean_peak = max(clean_tr(resp_win) - mean(clean_tr(base_idx)));
+    end
+end
+
+function gain = normalized_gain(post_peak, pre_peak)
+    if isnan(post_peak) || isnan(pre_peak)
+        gain = NaN;
+    else
+        gain = post_peak / (pre_peak + eps);
     end
 end

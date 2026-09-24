@@ -47,6 +47,40 @@ post response peak / pre-condition response peak
 
 The original analysis uses ROI 1, the 10 kHz focus centroid location, for the final gain values.
 
+The revised analysis also computes all of the following probe/ROI combinations:
+
+- 10 kHz and 30 kHz probes in the 10 kHz PC1 mask.
+- 10 kHz and 30 kHz probes in the full 30 kHz PC1 mask.
+- 10 kHz and 30 kHz probes in the disjoint 30 kHz-only mask (`mask_30 & ~mask_10`).
+
+The full 30 kHz mask is the primary readout for the question of whether modulation at
+the 10 kHz representation affects the 30 kHz PC1 top-percentile representation. The
+disjoint mask is a sensitivity analysis that removes the overlapping 10 kHz pixels.
+
+### `probe_roi_datapoints.csv`
+
+Long-format gain table containing all six probe/ROI combinations above. `PlotIncluded`
+indicates that the paired probe values for that ROI and time bin were both available.
+
+### Additional raw matrices
+
+The following matrices retain the exact experiment-by-bin values used to create the
+long table:
+
+- `G10_at_30_raw_matrix.csv` and `G30_at_30_raw_matrix.csv`: probes in the full 30 kHz mask.
+- `G10_at_30_specific_raw_matrix.csv` and `G30_at_30_specific_raw_matrix.csv`: probes in the disjoint 30 kHz-only mask.
+- `valid_mask_full30.csv` and `valid_mask_specific30.csv`: paired availability masks for those two ROI analyses.
+
+### `mask_geometry.csv`
+
+Per-experiment mask pixel counts, overlap, Dice coefficient, whole-mask centroid
+separation in pixels, connected-component counts, and pre/post trial counts.
+
+### `analysis_parameters.csv`
+
+The PC1 threshold, baseline and response frame windows, bin width, and pixel-size
+metadata used by the analysis.
+
 ### `clean_plot_datapoints.csv`
 
 Subset of `raw_plot_datapoints.csv` containing only rows where `PlotIncluded` is `true`. These are the paired-condition datapoints used in the main plot and paired statistical comparison.
@@ -94,11 +128,13 @@ Logical matrix with the same shape as `G10_all` and `G30_all`. A value of `1` me
 
 ## TIFF Mask Outputs
 
-The `pc_masks` folder contains up to two TIFF masks per experiment:
+The `pc_masks` folder contains the full masks and, when both source maps are
+available, the derived disjoint 30 kHz mask per experiment:
 
 ```text
 <Experiment>_PC1_10kHz_mask.tif
 <Experiment>_PC1_30kHz_mask.tif
+<Experiment>_PC1_30kHz_specific_mask.tif
 ```
 
 Each mask is generated from the corresponding workspace PC1 map using:
