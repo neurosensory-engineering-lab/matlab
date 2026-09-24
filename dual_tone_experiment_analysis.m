@@ -67,6 +67,14 @@ num_bins = 10;
 G10_all = nan(num_exps, num_bins); % 10k stim @ 10k ROI
 G30_all = nan(num_exps, num_bins); % 30k stim @ 10k ROI
 
+maskOutputDir = fullfile(pwd, 'dual_tone_pc_masks');
+if ~exist(maskOutputDir, 'dir')
+    [maskDirCreated, maskDirMessage] = mkdir(maskOutputDir);
+    if ~maskDirCreated
+        error('Could not create mask output folder: %s', maskDirMessage);
+    end
+end
+
 %% 3. MAIN ACQUISITION LOOP
 for idx = 1:num_exps
     baseID = uniqueExps{idx};
@@ -111,6 +119,13 @@ for idx = 1:num_exps
     mask_30 = (PC1_30 > 0.9);
     masks = {mask_10, mask_30};
     num_rois = 2;
+
+    safeBaseID = regexprep(baseID, '[^A-Za-z0-9_-]', '_');
+    imwrite(uint8(mask_10) * 255, ...
+        fullfile(maskOutputDir, [safeBaseID '_PC1_10kHz_mask.tif']), 'tif');
+    imwrite(uint8(mask_30) * 255, ...
+        fullfile(maskOutputDir, [safeBaseID '_PC1_30kHz_mask.tif']), 'tif');
+    fprintf('  Exported PC masks to %s\n', maskOutputDir);
     
     % --- PATH RESOLUTION (Using exact column names from your table) ---
     baseDir = char(rawTable{r_10, 'Folder path'});
@@ -195,6 +210,9 @@ sem10  = nanstd(clean_G10, [], 1) ./ sqrt(sum(~isnan(clean_G10), 1));
 sem30  = nanstd(clean_G30, [], 1) ./ sqrt(sum(~isnan(clean_G30), 1));
 
 dual_tone_interaction_stats = struct();
+p_values = nan(num_bins, 1);
+delta_gains = nan(num_bins, 1);
+n_pairs_by_bin = zeros(num_bins, 1);
 
 fprintf('\n=======================================================================\n');
 fprintf('  DUAL-TONE MECHANISTIC GAIN READOUT (10kHz Focus Zone Analysis)\n');
@@ -207,6 +225,7 @@ for b = 1:num_bins
     
     matched_idx = find(~isnan(v10) & ~isnan(v30));
     n_pairs = length(matched_idx);
+    n_pairs_by_bin(b) = n_pairs;
     
     if n_pairs >= 2
         x10 = v10(matched_idx);
@@ -214,6 +233,7 @@ for b = 1:num_bins
         
         diff_vec = x30 - x10;
         mean_diff = mean(diff_vec);
+        delta_gains(b) = mean_diff;
         
         if std(diff_vec) > 0
             t_stat = mean(diff_vec) / (std(diff_vec) / sqrt(n_pairs));
@@ -221,6 +241,7 @@ for b = 1:num_bins
         else
             p_val = 1.0;
         end
+        p_values(b) = p_val;
         
         log_name = sprintf('Bin%d_10kHz_vs_30kHz', b);
         dual_tone_interaction_stats.(log_name).time_bin = sprintf('Bin %d', b);
@@ -243,7 +264,58 @@ end
 global_max_y = max(bin_local_maxes);
 
 %% ============================================================
-% 5. PLOT PANEL (CLEAN STRIPPED TREND LINES)
+% 5. EXPORT ALL PLOTTING DATA TO A SPREADSHEET
+% =============================================================
+outputFile = fullfile(pwd, 'dual_tone_plot_data.xlsx');
+
+experimentNames = string(uniqueExps(:));
+rawRows = num_exps * num_bins * 2;
+rawExperiment = strings(rawRows, 1);
+rawCondition = strings(rawRows, 1);
+rawTimeBin = zeros(rawRows, 1);
+rawGain = nan(rawRows, 1);
+rawPlotIncluded = false(rawRows, 1);
+
+row = 0;
+for b = 1:num_bins
+    for idx = 1:num_exps
+        row = row + 1;
+        rawExperiment(row) = experimentNames(idx);
+        rawCondition(row) = "10 kHz";
+        rawTimeBin(row) = b;
+        rawGain(row) = G10_all(idx, b);
+        rawPlotIncluded(row) = valid_mask(idx, b);
+
+        row = row + 1;
+        rawExperiment(row) = experimentNames(idx);
+        rawCondition(row) = "30 kHz";
+        rawTimeBin(row) = b;
+        rawGain(row) = G30_all(idx, b);
+        rawPlotIncluded(row) = valid_mask(idx, b);
+    end
+end
+
+rawPlotData = table(rawExperiment, rawCondition, rawTimeBin, rawGain, rawPlotIncluded, ...
+    'VariableNames', {'Experiment', 'Condition', 'TimeBin', 'RawGain', 'PlotIncluded'});
+
+averagedPlotData = table((1:num_bins)', mean10', sem10', mean30', sem30', ...
+    sum(~isnan(clean_G10), 1)', sum(~isnan(clean_G30), 1)', ...
+    'VariableNames', {'TimeBin', 'Mean10kHz', 'SEM10kHz', 'Mean30kHz', ...
+    'SEM30kHz', 'N10kHz', 'N30kHz'});
+
+statisticsData = table((1:num_bins)', delta_gains, p_values, n_pairs_by_bin, ...
+    'VariableNames', {'TimeBin', 'DeltaGain_30minus10', 'PairedPValue', 'NPaired'});
+
+if exist(outputFile, 'file')
+    delete(outputFile);
+end
+writetable(rawPlotData, outputFile, 'Sheet', 'RawPlotData');
+writetable(averagedPlotData, outputFile, 'Sheet', 'AveragedPlotData');
+writetable(statisticsData, outputFile, 'Sheet', 'Statistics');
+fprintf('\n>>> Plotting data exported to %s\n', outputFile);
+
+%% ============================================================
+% 6. PLOT PANEL (CLEAN STRIPPED TREND LINES)
 % =============================================================
 figDT = figure(15000); clf;
 set(figDT, 'Color', 'w', 'Position', [100 100 1100 750]);
